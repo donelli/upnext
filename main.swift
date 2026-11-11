@@ -82,8 +82,15 @@ final class App: NSObject, NSApplicationDelegate {
         }
         if events.isEmpty { menu.addItem(withTitle: "Nothing left today", action: nil, keyEquivalent: "") }
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Refresh", action: #selector(forceRefresh), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
+    }
+
+    // Asks Google/iCloud to sync now; new events then arrive via EKEventStoreChanged.
+    @objc func forceRefresh() {
+        store.refreshSourcesIfNecessary()
+        refresh()
     }
 
     @objc func open(_ sender: NSMenuItem) {

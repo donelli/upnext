@@ -58,17 +58,19 @@ final class App: NSObject, NSApplicationDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refresh() }
     }
 
-    func upcoming(now: Date) -> [EKEvent] {
-        let endOfDay = Calendar.current.startOfDay(for: now).addingTimeInterval(86400)
-        let pred = store.predicateForEvents(withStart: now, end: endOfDay, calendars: nil)
+    func upcoming(from start: Date, to end: Date) -> [EKEvent] {
+        let pred = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: pred)
-            .filter { !$0.isAllDay && $0.endDate > now && !$0.isDeclined }
+            .filter { !$0.isAllDay && $0.endDate > start && !$0.isDeclined }
             .sorted { $0.startDate < $1.startDate }
     }
 
     @objc func refresh() {
         let now = Date()
-        let events = upcoming(now: now)
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        let events = upcoming(from: now, to: tomorrow)
+        let tomorrowEvents = upcoming(from: tomorrow, to: cal.date(byAdding: .day, value: 1, to: tomorrow)!)
         // Prefer a meeting that's about to start over one already running.
         let next = events.first { $0.startDate > now && $0.startDate.timeIntervalSince(now) < 600 } ?? events.first
         if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
@@ -77,14 +79,19 @@ final class App: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         let fmt = DateFormatter(); fmt.timeStyle = .short
-        for e in events {
+        func addEvents(_ events: [EKEvent]) { for e in events {
             let mi = NSMenuItem(title: "\(fmt.string(from: e.startDate))  \(e.title ?? "Busy") (\(dur(e.endDate.timeIntervalSince(e.startDate))))", action: #selector(open(_:)), keyEquivalent: "")
             mi.target = self
             mi.representedObject = e
             if meetingURL([e.url?.absoluteString, e.location, e.notes]) != nil { mi.title += "  🎥" }
             menu.addItem(mi)
-        }
+        } }
+        addEvents(events)
         if events.isEmpty { menu.addItem(withTitle: "Nothing left today", action: nil, keyEquivalent: "") }
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "Tomorrow"))
+        addEvents(tomorrowEvents)
+        if tomorrowEvents.isEmpty { menu.addItem(withTitle: "Nothing tomorrow", action: nil, keyEquivalent: "") }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Refresh", action: #selector(forceRefresh), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

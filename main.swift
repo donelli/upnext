@@ -1,5 +1,6 @@
 import AppKit
 import EventKit
+import ServiceManagement
 
 // Pure helpers (covered by --selftest).
 func meetingURL(_ texts: [String?]) -> URL? {
@@ -36,6 +37,13 @@ final class App: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         item.button?.title = "📅"
+        // First launch only, so turning it off in Login Items sticks.
+        if !UserDefaults.standard.bool(forKey: "registeredLoginItem") {
+            do {
+                try SMAppService.mainApp.register()
+                UserDefaults.standard.set(true, forKey: "registeredLoginItem")
+            } catch { NSLog("UpNext: login item registration failed: \(error)") }
+        }
         store.requestFullAccessToEvents { granted, _ in
             DispatchQueue.main.async {
                 if !granted { self.item.button?.title = "📅 no calendar access" }

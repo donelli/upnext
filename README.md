@@ -15,6 +15,6 @@ Needs the Xcode command line tools (`swiftc`).
 open ~/Applications/UpNext.app   # click Allow when macOS asks for calendar access
 ```
 
-To start it at login, add it under System Settings → General → Login Items.
+It adds itself to Login Items on first launch; turn it off there if you don't want it.
 
 Self-test: `swiftc main.swift -o /tmp/upnext && /tmp/upnext --selftest`

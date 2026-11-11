@@ -1,6 +1,6 @@
 # UpNext
 
-A tiny macOS menu bar app that shows your next meeting: `Standup in 12m`, or `Standup · 8m left` while it's running.
+A tiny macOS menu bar app that shows your next meeting: `Standup in 12m (30m)`, or `Standup · 8m left` while it's running.
 
 - Click the menu bar item to see the rest of today's meetings. Meetings with a Zoom, Meet, Teams, Webex, Whereby or Around link get a 🎥 and open the call when clicked; other meetings open in Calendar.
 - Skips all-day events and meetings you declined.

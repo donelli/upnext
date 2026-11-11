@@ -11,20 +11,23 @@ func meetingURL(_ texts: [String?]) -> URL? {
     return nil
 }
 
+func dur(_ s: TimeInterval) -> String {
+    let m = Int((s / 60).rounded(.up))
+    return m < 60 ? "\(m)m" : "\(m / 60)h\(m % 60 == 0 ? "" : " \(m % 60)m")"
+}
+
 func label(title: String, start: Date, end: Date, now: Date) -> String {
-    func dur(_ s: TimeInterval) -> String {
-        let m = Int((s / 60).rounded(.up))
-        return m < 60 ? "\(m)m" : "\(m / 60)h\(m % 60 == 0 ? "" : " \(m % 60)m")"
-    }
     let t = title.count > 30 ? title.prefix(29) + "…" : title
-    return start <= now ? "\(t) · \(dur(end.timeIntervalSince(now))) left" : "\(t) in \(dur(start.timeIntervalSince(now)))"
+    return start <= now
+        ? "\(t) · \(dur(end.timeIntervalSince(now))) left"
+        : "\(t) in \(dur(start.timeIntervalSince(now))) (\(dur(end.timeIntervalSince(start))))"
 }
 
 if CommandLine.arguments.contains("--selftest") {
     let now = Date(timeIntervalSince1970: 0)
-    assert(label(title: "Standup", start: now + 600, end: now + 1200, now: now) == "Standup in 10m")
+    assert(label(title: "Standup", start: now + 600, end: now + 1200, now: now) == "Standup in 10m (10m)")
     assert(label(title: "Standup", start: now - 60, end: now + 90, now: now) == "Standup · 2m left")
-    assert(label(title: "1:1", start: now + 5400, end: now + 9000, now: now) == "1:1 in 1h 30m")
+    assert(label(title: "1:1", start: now + 5400, end: now + 9000, now: now) == "1:1 in 1h 30m (1h)")
     assert(meetingURL([nil, "Join: https://meet.google.com/abc-defg-hij\nthanks"])?.absoluteString == "https://meet.google.com/abc-defg-hij")
     assert(meetingURL(["https://example.com/doc"]) == nil)
     print("selftest ok"); exit(0)
@@ -74,7 +77,7 @@ final class App: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let fmt = DateFormatter(); fmt.timeStyle = .short
         for e in events {
-            let mi = NSMenuItem(title: "\(fmt.string(from: e.startDate))  \(e.title ?? "Busy")", action: #selector(open(_:)), keyEquivalent: "")
+            let mi = NSMenuItem(title: "\(fmt.string(from: e.startDate))  \(e.title ?? "Busy") (\(dur(e.endDate.timeIntervalSince(e.startDate))))", action: #selector(open(_:)), keyEquivalent: "")
             mi.target = self
             mi.representedObject = e
             if meetingURL([e.url?.absoluteString, e.location, e.notes]) != nil { mi.title += "  🎥" }

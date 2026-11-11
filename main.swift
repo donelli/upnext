@@ -39,7 +39,8 @@ final class App: NSObject, NSApplicationDelegate {
     var timer: Timer?
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        item.button?.title = "📅"
+        item.button?.image = NSImage(systemSymbolName: "calendar", accessibilityDescription: "UpNext")
+        item.button?.imagePosition = .imageLeading
         // First launch only, so turning it off in Login Items sticks.
         if !UserDefaults.standard.bool(forKey: "registeredLoginItem") {
             do {
@@ -49,7 +50,7 @@ final class App: NSObject, NSApplicationDelegate {
         }
         store.requestFullAccessToEvents { granted, _ in
             DispatchQueue.main.async {
-                if !granted { self.item.button?.title = "📅 no calendar access" }
+                if !granted { self.item.button?.title = " No calendar access" }
                 self.refresh()
             }
         }
@@ -71,7 +72,7 @@ final class App: NSObject, NSApplicationDelegate {
         // Prefer a meeting that's about to start over one already running.
         let next = events.first { $0.startDate > now && $0.startDate.timeIntervalSince(now) < 600 } ?? events.first
         if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
-            item.button?.title = next.map { label(title: $0.title ?? "Busy", start: $0.startDate, end: $0.endDate, now: now) } ?? "📅 No more meetings"
+            item.button?.title = next.map { " " + label(title: $0.title ?? "Busy", start: $0.startDate, end: $0.endDate, now: now) } ?? " No more meetings"
         }
 
         let menu = NSMenu()

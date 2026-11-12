@@ -1,6 +1,7 @@
 import AppKit
 import EventKit
 import ServiceManagement
+import UserNotifications
 
 // Pure helpers (covered by --selftest).
 func meetingURL(_ texts: [String?]) -> URL? {
@@ -33,7 +34,7 @@ if CommandLine.arguments.contains("--selftest") {
     print("selftest ok"); exit(0)
 }
 
-final class App: NSObject, NSApplicationDelegate {
+final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let store = EKEventStore()
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     var timer: Timer?
@@ -54,6 +55,10 @@ final class App: NSObject, NSApplicationDelegate {
                 self.refresh()
             }
         }
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.setNotificationCategories([UNNotificationCategory(identifier: "meeting", actions: [UNNotificationAction(identifier: "join", title: "Join", options: .foreground)], intentIdentifiers: [])])
+        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: .EKEventStoreChanged, object: store)
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refresh() }
     }
@@ -77,12 +82,18 @@ final class App: NSObject, NSApplicationDelegate {
             item.button?.title = next.map { " " + label(title: $0.title ?? "Busy", start: $0.startDate, end: $0.endDate, now: now) } ?? " No more meetings"
         }
 
+        scheduleReminders(events + tomorrowEvents, now: now)
+
         let menu = NSMenu()
         let fmt = DateFormatter(); fmt.timeStyle = .short
         func addEvents(_ events: [EKEvent]) { for e in events {
             let mi = NSMenuItem(title: "\(fmt.string(from: e.startDate))  \(e.title ?? "Busy") (\(dur(e.endDate.timeIntervalSince(e.startDate))))", action: #selector(open(_:)), keyEquivalent: "")
             mi.target = self
             mi.representedObject = e
+            let color = e.calendar.color ?? .gray
+            mi.image = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { r in
+                color.setFill(); NSBezierPath(ovalIn: r).fill(); return true
+            }
             if meetingURL([e.url?.absoluteString, e.location, e.notes]) != nil { mi.title += "  🎥" }
             menu.addItem(mi)
         } }
@@ -106,9 +117,42 @@ final class App: NSObject, NSApplicationDelegate {
 
     @objc func open(_ sender: NSMenuItem) {
         guard let e = sender.representedObject as? EKEvent else { return }
-        let url = meetingURL([e.url?.absoluteString, e.location, e.notes])
+        NSWorkspace.shared.open(link(for: e))
+    }
+
+    func link(for e: EKEvent) -> URL {
+        meetingURL([e.url?.absoluteString, e.location, e.notes])
             ?? URL(string: "ical://ekevent/\(e.calendarItemExternalIdentifier ?? "")")!
-        NSWorkspace.shared.open(url)
+    }
+
+    // Rebuilt on every refresh so moved or cancelled meetings never leave a stale reminder.
+    func scheduleReminders(_ events: [EKEvent], now: Date) {
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        for e in events where e.startDate.timeIntervalSince(now) > 60 {
+            let c = UNMutableNotificationContent()
+            c.title = e.title ?? "Busy"
+            c.body = "Starts in 1 minute"
+            c.sound = .default
+            c.userInfo = ["url": link(for: e).absoluteString]
+            if meetingURL([e.url?.absoluteString, e.location, e.notes]) != nil { c.categoryIdentifier = "meeting" }
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: e.startDate.timeIntervalSince(now) - 60, repeats: false)
+            center.add(UNNotificationRequest(identifier: "\(e.eventIdentifier ?? "")@\(e.startDate.timeIntervalSince1970)", content: c, trigger: trigger))
+        }
+    }
+
+    // Show banners even though UpNext counts as the active app.
+    func userNotificationCenter(_ c: UNUserNotificationCenter, willPresent n: UNNotification, withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
+    }
+
+    // Clicking the banner or Join opens the call (or the event in Calendar).
+    func userNotificationCenter(_ c: UNUserNotificationCenter, didReceive r: UNNotificationResponse, withCompletionHandler done: @escaping () -> Void) {
+        if r.actionIdentifier != UNNotificationDismissActionIdentifier,
+           let s = r.notification.request.content.userInfo["url"] as? String, let url = URL(string: s) {
+            NSWorkspace.shared.open(url)
+        }
+        done()
     }
 }
 
